@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "nativeContract": 2,
+  "name": "mesh-view",
+  "native": "MeshView",
+  "ios": {
+    "classes": [
+      "MeshViewModule"
+    ]
+  },
+  "android": {
+    "namespace": "dev.pyxpo.modules.meshview",
+    "classes": [
+      "dev.pyxpo.modules.meshview.MeshViewModule"
+    ],
+    "minSdk": 24,
+    "dependencies": []
+  }
+}
