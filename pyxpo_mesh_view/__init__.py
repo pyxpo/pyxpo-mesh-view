@@ -20,27 +20,37 @@ u16 order_of_frame[F] (padded to 4 bytes); u16 indices[O][I]. `uv` is 0-1 in the
 in the box around every frame (y down) and `aspect` is that box's width / height. Each frame draws the `I`
 indices (triangles, back to front) of its order. A file can hold several orders so parts change which is in
 front; pad shorter orders with degenerate triangles (0, 0, 0).
+
+`export_async(source, texture, path)` renders a clip to an MP4 (H.264) or an animated GIF file on the device:
+
+    info = await MeshView.export_async("/path/clip.pxmesh", "/path/drawing.png", "/path/clip.mp4", loops=3)
 """
 from __future__ import annotations
 
+import base64
+import itertools
 import math
+import os
 import struct
 from typing import Any, Callable, Dict, Optional, Sequence
 from urllib.parse import unquote, urlparse
 
 from pyxpo import component, use_imperative_handle, use_ref
-from pyxpo.module_api import call, native_view, require_linked, view_tag
+from pyxpo.module_api import call, native_view, on_event, require_linked, view_tag
 from pyxpo.style import parse_color
 
 __version__ = "0.1.0a1"
 
-__all__ = ["MeshView", "MeshViewHandle", "write_mesh", "read_header", "MAGIC", "HEADER_SIZE"]
+__all__ = ["MeshView", "MeshViewHandle", "write_mesh", "read_header", "export_async", "export_plan", "MAGIC",
+           "HEADER_SIZE", "FORMATS"]
 
 _View = native_view("PxMeshView")
 
 MAGIC = b"PXMESH1\0"
 HEADER_SIZE = 32
 MAX_VERTICES = 65536     # u16 indices
+FORMATS = ("mp4", "gif")
+MAX_EXPORT_SIZE = 2048
 
 
 def _number(name: str, value: Any, low: float, high: float = math.inf) -> float:
@@ -158,3 +168,110 @@ def MeshView(source: Optional[str] = None, texture: Optional[str] = None, playin
         if fn is not None:
             wire[name] = fn
     return _View(ref=inner, style=style, **wire, **props)
+
+
+def _even(x: float, step: int) -> int:
+    return max(step, int(round(x / step)) * step)
+
+
+def export_plan(header: Dict[str, Any], format: str, size: Optional[int] = None, aspect: Optional[float] = None,
+                padding: float = 0.05, fps: Optional[float] = None, loops: int = 1) -> Dict[str, Any]:
+    """What `export_async` asks the native side to draw: `{"width", "height", "rect", "fps", "frames"}`.
+
+    `rect` is `[x, y, w, h]` in output pixels where the box around every frame goes; `frames` lists the clip
+    frame shown in each output frame. The MP4 side lengths are multiples of 16 (what every H.264 encoder takes),
+    the GIF's of 2."""
+    if format not in FORMATS:
+        raise ValueError("format must be one of %s, got %r" % (", ".join(FORMATS), format))
+    if size is None:
+        size = 720 if format == "mp4" else 480
+    if isinstance(size, bool) or not isinstance(size, int) or not 32 <= size <= MAX_EXPORT_SIZE:
+        raise ValueError("size must be an int from 32 to %d, got %r" % (MAX_EXPORT_SIZE, size))
+    pad = _number("padding", padding, 0, 0.45)
+    clip_aspect = header["aspect"]
+    out_aspect = clip_aspect if aspect is None else _number("aspect", aspect, 0.1, 10)
+    step = 16 if format == "mp4" else 2
+    if out_aspect >= 1:
+        w, h = _even(size, step), _even(size / out_aspect, step)
+    else:
+        w, h = _even(size * out_aspect, step), _even(size, step)
+    # The box around every frame, contained in the output minus `padding` of its longer side on every edge.
+    inner_w, inner_h = w - 2 * pad * max(w, h), h - 2 * pad * max(w, h)
+    bw = min(inner_w, inner_h * clip_aspect)
+    bh = bw / clip_aspect
+    rect = [round((w - bw) / 2, 3), round((h - bh) / 2, 3), round(bw, 3), round(bh, 3)]
+    src_fps = header["fps"]
+    out_fps = (min(src_fps, 30.0) if format == "mp4" else min(src_fps / 2, 15.0)) if fps is None else \
+        _number("fps", fps, 1, 60)
+    if isinstance(loops, bool) or not isinstance(loops, int) or not 1 <= loops <= 100:
+        raise ValueError("loops must be an int from 1 to 100, got %r" % (loops,))
+    count = header["frames"]
+    n = max(1, int(round(count / src_fps * out_fps)))
+    one = [min(count - 1, int(k * src_fps / out_fps + 1e-6)) for k in range(n)]
+    return {"width": w, "height": h, "rect": rect, "fps": out_fps, "frames": one * loops}
+
+
+_export_ids = itertools.count(1)
+_progress: Dict[int, Callable[[float], Any]] = {}
+_subscribed = [False]
+
+
+def _on_progress(data: Any) -> None:
+    fn = _progress.get(int((data or {}).get("id", 0)))
+    if fn is not None:
+        fn(float(data.get("progress", 0)))
+
+
+async def export_async(source: str, texture: str, path: str, *, format: Optional[str] = None,
+                       size: Optional[int] = None, aspect: Optional[float] = None, padding: float = 0.05,
+                       background_color: Any = "#ffffff", fps: Optional[float] = None, loops: int = 1,
+                       on_progress: Optional[Callable[[float], Any]] = None) -> Dict[str, Any]:
+    """Renders the clip `source` (PXMESH1) with `texture` to an MP4 (H.264) or an animated GIF at `path`.
+
+    `format` is `"mp4"` or `"gif"` (default: from the extension of `path`). `size` is the longer side in pixels
+    (default 720 for MP4, 480 for GIF); `aspect` the output width / height (default the clip's), with the clip
+    fitted inside and centred, `padding` (a fraction of the longer side) on every edge. The background is opaque
+    (its alpha is ignored). `fps` defaults to the clip's rate up to 30 for MP4 and half of it up to 15 for GIF.
+    `loops` repeats the clip in the file (a GIF also loops forever when played). `on_progress(p)` gets 0 to 1.
+
+    Returns `{"path", "format", "width", "height", "frames", "fps", "duration"}`. Android encodes with
+    MediaCodec, iOS with AVFoundation and ImageIO, the web with WebCodecs (MP4) and a built-in GIF encoder."""
+    src, tex, out = _path("source", source), _path("texture", texture), _path("path", path)
+    fmt = format if format is not None else os.path.splitext(out)[1].lstrip(".").lower()
+    if fmt not in FORMATS:
+        raise ValueError("format must be one of %s (or path must end in .mp4 or .gif), got %r"
+                         % (", ".join(FORMATS), fmt))
+    with open(src, "rb") as f:
+        header = read_header(f.read())
+    if not os.path.isfile(tex):
+        raise FileNotFoundError("no texture file %s" % tex)
+    plan = export_plan(header, fmt, size, aspect, padding, fps, loops)
+    bg = parse_color(background_color)
+    bg = (0xFF000000 | (int(bg) & 0xFFFFFF)) if bg is not None else 0xFFFFFFFF
+    folder = os.path.dirname(os.path.abspath(out))
+    if not os.path.isdir(folder):
+        raise FileNotFoundError("no folder %s" % folder)
+    require_linked("MeshView", "mesh-view", package="pyxpo-mesh-view")
+    if not _subscribed[0]:
+        on_event("MeshView.progress", _on_progress)
+        _subscribed[0] = True
+    eid = next(_export_ids)
+    if on_progress is not None:
+        _progress[eid] = on_progress
+    try:
+        res = await call("MeshView", "export", {
+            "id": eid, "source": src, "texture": tex, "path": out, "format": fmt, "width": plan["width"],
+            "height": plan["height"], "rect": plan["rect"], "fps": plan["fps"], "frames": plan["frames"],
+            "background_color": bg,
+        }, reply=True)
+    finally:
+        _progress.pop(eid, None)
+    if isinstance(res, dict) and res.get("data") is not None:
+        # The web page and the desktop window encode in the page and send the file back.
+        with open(out, "wb") as f:
+            f.write(base64.b64decode(res["data"]))
+    if not os.path.isfile(out):
+        raise RuntimeError("the export did not write %s" % out)
+    n = len(plan["frames"])
+    return {"path": out, "format": fmt, "width": plan["width"], "height": plan["height"], "frames": n,
+            "fps": plan["fps"], "duration": n / plan["fps"]}

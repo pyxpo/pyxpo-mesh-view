@@ -2,7 +2,7 @@ import Metal
 import MetalKit
 import UIKit
 
-/// pyxpo-mesh-view on iOS: a Metal view (`PxMeshView`) that plays a PXMESH1 file.
+/// pyxpo-mesh-view on iOS: a Metal view (`PxMeshView`) that plays a PXMESH1 file, and `export` (MeshExport.swift).
 final class MeshViewModule: PxViewModule {
     static let moduleName = "MeshView"
     static let viewTypes = ["PxMeshView"]
@@ -14,6 +14,23 @@ final class MeshViewModule: PxViewModule {
     }
 
     func call(_ ctx: PxModuleContext, _ method: String, _ args: [Any], _ reply: @escaping PxReply) {
+        if method == "export" {
+            guard let o = args.first as? [String: Any] else { reply(nil, "export needs options"); return }
+            let id = (o["id"] as? NSNumber)?.intValue ?? 0
+            DispatchQueue.global(qos: .userInitiated).async { [weak ctx] in
+                var last = -1
+                do {
+                    try MeshExport.run(o) { p in
+                        let pct = Int(p * 100)
+                        if pct != last { last = pct; ctx?.emit("MeshView.progress", ["id": id, "progress": p]) }
+                    }
+                    reply(nil, nil)
+                } catch {
+                    reply(nil, "export failed: \(error.localizedDescription)")
+                }
+            }
+            return
+        }
         DispatchQueue.main.async {
             guard let tag = (args.first as? NSNumber)?.intValue, let v = ctx.view(tag) as? PxMeshView else {
                 reply(nil, "The MeshView is not mounted")
@@ -90,7 +107,7 @@ final class PxMeshView: PxNativeView {
     func dispose() { player.dispose() }
 }
 
-private let shaderSource = """
+let shaderSource = """
 #include <metal_stdlib>
 using namespace metal;
 struct VOut { float4 pos [[position]]; float2 uv; };

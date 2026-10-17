@@ -67,6 +67,17 @@ file name.
   which one is in front, for example an arm that swings from behind the body to in front of it.
 - `read_header(data)`: `{"vertices", "frames", "indices", "orders", "fps", "aspect"}` of PXMESH1 bytes. It
   raises `ValueError` for a bad file.
+- `await export_async(source, texture, path, format=None, size=None, aspect=None, padding=0.05,
+  background_color="#ffffff", fps=None, loops=1, on_progress=None)`: renders the clip to an MP4 (H.264) or an
+  animated GIF at `path`. `format` defaults to the extension of `path`. `size` is the longer side (default 720 for
+  MP4, 480 for GIF), `aspect` the output width / height (default the clip's); the clip is fitted inside and centred
+  with `padding` (a fraction of the longer side) on every edge. `fps` defaults to the clip's rate up to 30 for MP4
+  and half of it up to 15 for GIF. `loops` repeats the clip in the file. `on_progress(p)` gets 0 to 1. Returns
+  `{"path", "format", "width", "height", "frames", "fps", "duration"}`. Android encodes with MediaCodec, iOS with
+  AVFoundation and ImageIO, the web and the desktop window with WebCodecs (MP4) and a built-in GIF encoder. Share
+  the file with pyxpo-sharing or save it with pyxpo-media-library.
+- `export_plan(header, format, size=None, aspect=None, padding=0.05, fps=None, loops=1)`: the output size, the
+  clip rectangle and the clip frame of each output frame that `export_async` uses, for checks and tests.
 
 ## PXMESH1
 
