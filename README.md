@@ -1,5 +1,7 @@
 # pyxpo-mesh-view
 
+[![CI](https://github.com/pyxpo/pyxpo-mesh-view/actions/workflows/ci.yml/badge.svg)](https://github.com/pyxpo/pyxpo-mesh-view/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/pyxpo-mesh-view)](https://pypi.org/project/pyxpo-mesh-view/) [![Python](https://img.shields.io/pypi/pyversions/pyxpo-mesh-view)](https://pypi.org/project/pyxpo-mesh-view/) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 Plays a textured 2D mesh animation in [pyxpo](https://github.com/pyxpo/pyxpo) apps written in Python: one image, a
 triangle mesh over it, and the mesh's vertex positions for every frame. Use it for cut-out and skeletal 2D animation,
 such as a drawing that comes to life. The GPU draws each frame, so the animation plays at the screen's rate while Python
