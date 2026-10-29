@@ -7,7 +7,7 @@ does nothing. Android draws with `Canvas.drawVertices`, iOS with Metal, and the 
 It can also render a clip to an MP4 or an animated GIF on the device.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/pyxpo/pyxpo/main/packages/mesh-view/docs/images/hero.png" width="420" alt="A mesh animation of a landscape bending, playing on iOS, with the frame count, fps, vertex count and triangle count under it">
+  <img src="https://raw.githubusercontent.com/pyxpo/pyxpo-mesh-view/main/docs/images/hero.png" width="420" alt="A mesh animation of a landscape bending, playing on iOS, with the frame count, fps, vertex count and triangle count under it">
 </p>
 
 ```python
@@ -114,7 +114,7 @@ def Player(mesh_path, picture_path):
 > them as assets and copy them out. `source` and `texture` take a plain path or a `file://` URI, nothing else.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/pyxpo/pyxpo/main/packages/mesh-view/docs/images/mesh.png" width="400" alt="The mesh animation on iOS, bent over to one side">
+  <img src="https://raw.githubusercontent.com/pyxpo/pyxpo-mesh-view/main/docs/images/mesh.png" width="400" alt="The mesh animation on iOS, bent over to one side">
 </p>
 
 ## `MeshView` props

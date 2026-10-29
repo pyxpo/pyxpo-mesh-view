@@ -31,11 +31,11 @@ requires-python = ">=3.9"
 dependencies = ["pyxpo>=0.1.0a3,<0.2"]
 
 [project.urls]
-Homepage = "https://github.com/pyxpo/pyxpo/tree/main/packages/mesh-view"
-Documentation = "https://github.com/pyxpo/pyxpo/blob/main/packages/mesh-view/README.md"
-Changelog = "https://github.com/pyxpo/pyxpo/blob/main/packages/mesh-view/CHANGELOG.md"
-Source = "https://github.com/pyxpo/pyxpo/tree/main/packages/mesh-view"
-Issues = "https://github.com/pyxpo/pyxpo/issues"
+Homepage = "https://github.com/pyxpo/pyxpo-mesh-view"
+Documentation = "https://github.com/pyxpo/pyxpo-mesh-view/blob/main/README.md"
+Changelog = "https://github.com/pyxpo/pyxpo-mesh-view/blob/main/CHANGELOG.md"
+Source = "https://github.com/pyxpo/pyxpo-mesh-view"
+Issues = "https://github.com/pyxpo/pyxpo-mesh-view/issues"
 
 # How `pyxpo build` finds this module: the entry point name is the module name apps list in
 # `[tool.pyxpo] modules`, its value the import package holding pyxpo-module.json.
